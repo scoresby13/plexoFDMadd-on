@@ -1,0 +1,25 @@
+{
+  "uuid": "plexo-multi-network",
+  "name": "Plexo Multi-Network",
+  "author": "plexoFDMadd-on contributors",
+  "description": "Speeds up large downloads by fetching each file over all your internet connections at once (Wi-Fi, Ethernet, a tethered phone). Based on Plexo.",
+  "version": "1.0.0",
+  "icon": "icon.svg",
+  "mediaParser": true,
+  "mediaListParser": false,
+  "minApiVersion": 7,
+  "minFeaturesLevel": 2,
+  "targetApiVersion": 9,
+  "dependencies": {
+    "Python": {
+      "minVersion": "3.10"
+    }
+  },
+  "permissions": [
+    "launchPython"
+  ],
+  "scripts": [
+    "plexo.js",
+    "msparser.js"
+  ]
+}

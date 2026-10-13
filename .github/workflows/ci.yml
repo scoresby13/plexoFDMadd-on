@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bridge tests
+        run: python -m unittest tests.test_bridge -v
+      - name: Add-on script tests
+        run: node --test tests/addon.test.mjs
+
+  platforms:
+    name: Network discovery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest tests.test_bridge.Units -v
+      - name: List this machine's networks
+        run: python addon/bridge/plexo_fdm.py networks
+
+  package:
+    name: Package
+    needs: [test, platforms]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build plexo-multi-network.fda
+        run: ./build/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plexo-multi-network
+          path: dist/plexo-multi-network.fda
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/plexo-multi-network.fda
