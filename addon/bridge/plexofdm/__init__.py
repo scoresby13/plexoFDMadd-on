@@ -6,4 +6,4 @@ way Plexo (https://github.com/anmolkapil/plexo) does it. Standard library only, 
 installs for add-ons is all it needs.
 """
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"

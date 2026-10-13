@@ -53,6 +53,32 @@ def api(path, body=None, port=None, timeout=60):
         raise RuntimeError(answer.get("message") or str(error))
 
 
+def diag(message):
+    """A line in addon.log in the data folder: every time FDM runs this script, what it was
+    asked and how it went, so a link FDM downloaded without the bridge can be explained."""
+    try:
+        path = data_file("addon.log")
+        if os.path.exists(path) and os.path.getsize(path) > 512 * 1024:
+            os.replace(path, path + ".old")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), message))
+    except OSError:
+        pass
+
+
+def redact(url):
+    """The link without its query: those often carry tokens."""
+    return str(url).split("?", 1)[0]
+
+
+def _tail(path, lines=15):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return "".join(f.readlines()[-lines:]).strip()
+    except OSError:
+        return ""
+
+
 def ping(port, timeout=1.5):
     try:
         return api("/api/ping", port=port, timeout=timeout)
@@ -64,8 +90,11 @@ def spawn():
     """Starts `serve` in the background, outliving the process FDM launched."""
     script = os.path.abspath(__file__)
     exe = sys.executable
-    kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
+    # Whatever the bridge prints before its own log is set up (an import error, a crash) lands here.
+    errors = open(data_file("bridge-stderr.log"), "ab")
+    kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": errors,
               "cwd": data_dir(), "close_fds": True}
+    diag("starting the bridge: %s %s serve" % (exe, script))
     if sys.platform == "win32":
         windowless = os.path.join(os.path.dirname(exe), "pythonw.exe")
         if os.path.exists(windowless):
@@ -96,16 +125,25 @@ def ensure_running(config):
                 break
             time.sleep(0.1)
     port = int(config["port"])
-    spawn()
+    proc = spawn()
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         if ping(port, 0.5):
+            diag("bridge is up on port %d (pid %s)" % (port, proc.pid))
             return port
+        if proc.poll() is not None:
+            break
         time.sleep(0.15)
-    raise RuntimeError("The bridge didn't start; see %s" % data_file("bridge.log"))
+    details = _tail(data_file("bridge-stderr.log")) or _tail(data_file("bridge.log"))
+    code = proc.poll()
+    raise RuntimeError("The bridge didn't start (%s)%s" % (
+        "exit code %s" % code if code is not None else "no answer on port %d after 15 s" % port,
+        ": " + details if details else ""))
 
 
 def out(value):
+    if "reason" in value or "url" in value:
+        diag("-> %s" % (value.get("message") or value.get("url")))
     sys.stdout.write(json.dumps(value) + "\n")
     sys.stdout.flush()
 
@@ -230,9 +268,16 @@ def main(argv=None):
         sub.add_parser(name).set_defaults(func=func)
 
     args = parser.parse_args(argv)
+    if args.command != "serve":
+        diag("%s %s | python %s %s | script %s" % (
+            args.command, redact(getattr(args, "url", "") or ""), sys.version.split()[0], sys.executable,
+            os.path.abspath(__file__)))
     try:
         args.func(args)
     except Exception as error:
+        import traceback
+
+        diag("failed: %s\n%s" % (error, traceback.format_exc()))
         if args.command == "register":
             out({"ok": False, "reason": "error", "message": str(error)})
         else:
