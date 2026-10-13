@@ -6,6 +6,7 @@ import hashlib
 import http.client
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -344,6 +345,79 @@ class NetworkChoice(unittest.TestCase):
             self.assertTrue(register(bridge, origin.url + "#plexo")["ok"])
         finally:
             origin.close()
+
+
+class Proxy(unittest.TestCase):
+    """The bridge as FDM's proxy: each connection leaves through the network carrying fewest."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.bridge, cls.httpd = start_bridge()
+        cls.origin = Origin(size=4 * MB)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.origin.close()
+
+    def setUp(self):
+        with self.origin.lock:
+            self.origin.requests.clear()
+
+    def fetch_through_tunnel(self, start, end, results):
+        conn = http.client.HTTPConnection("127.0.0.1", self.bridge.port, timeout=30)
+        conn.set_tunnel("127.0.0.1", self.origin.port)
+        conn.request("GET", "/file.bin", headers={"Range": "bytes=%d-%d" % (start, end)})
+        results[start] = conn.getresponse().read()
+        conn.close()
+
+    def test_connect_tunnels_spread_over_networks(self):
+        size = len(self.origin.data)
+        parts = [(i * size // 4, (i + 1) * size // 4 - 1) for i in range(4)]
+        results = {}
+        threads = [threading.Thread(target=self.fetch_through_tunnel, args=(a, b, results)) for a, b in parts]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(60)
+        self.assertEqual(b"".join(results[a] for a, _ in parts), self.origin.data)
+        used = {client for client, _, _ in self.origin.requests}
+        self.assertEqual(used, {"127.0.0.2", "127.0.0.3"})
+
+    def test_plain_http_request(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.bridge.port, timeout=30)
+        conn.request("GET", "http://127.0.0.1:%d/file.bin" % self.origin.port, headers={"Range": "bytes=10-19"})
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 206)
+        self.assertEqual(resp.read(), self.origin.data[10:20])
+        self.assertIn(self.origin.requests[-1][0], {"127.0.0.2", "127.0.0.3"})
+
+    def test_socks5_connect(self):
+        sock = socket.create_connection(("127.0.0.1", self.bridge.port), timeout=30)
+        sock.sendall(b"\x05\x01\x00")
+        self.assertEqual(sock.recv(2), b"\x05\x00")
+        sock.sendall(b"\x05\x01\x00\x01" + socket.inet_aton("127.0.0.1") + self.origin.port.to_bytes(2, "big"))
+        self.assertEqual(sock.recv(10)[:2], b"\x05\x00")
+        sock.sendall(b"GET /file.bin HTTP/1.1\r\nHost: x\r\nRange: bytes=0-99\r\nConnection: close\r\n\r\n")
+        data = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+        self.assertTrue(data.startswith(b"HTTP/1.1 206"))
+        self.assertTrue(data.endswith(self.origin.data[:100]))
+        self.assertIn(self.origin.requests[-1][0], {"127.0.0.2", "127.0.0.3"})
+
+    def test_socks5_rejects_udp(self):
+        sock = socket.create_connection(("127.0.0.1", self.bridge.port), timeout=30)
+        sock.sendall(b"\x05\x01\x00")
+        sock.recv(2)
+        sock.sendall(b"\x05\x03\x00\x01\x00\x00\x00\x00\x00\x00")
+        self.assertEqual(sock.recv(10)[:2], b"\x05\x07")
+
+    def test_status_page_still_guarded(self):
+        status, _ = call(self.bridge, "/api/state", host="attacker.example:%d" % self.bridge.port)
+        self.assertEqual(status, 403)
 
 
 class CommandLine(unittest.TestCase):

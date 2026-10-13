@@ -69,6 +69,16 @@
   </header>
   <div id="notice"></div>
 
+  <h2>Use it for every FDM download, torrents included</h2>
+  <div class="card"><div class="row" style="display:block">
+    <div class="muted small">In FDM, open <b>Settings › Network</b>, choose a manual proxy, and enter:</div>
+    <div class="mono small" style="margin-top:6px">HTTP and HTTPS proxy: <b>127.0.0.1</b> port <b class="port">47913</b><br>
+      SOCKS5 proxy (torrents): <b>127.0.0.1</b> port <b class="port">47913</b></div>
+    <div class="muted small" style="margin-top:6px">Each connection FDM opens then leaves through the network carrying the fewest.
+      Set FDM to use 8 or more connections per download so every network gets some. Keep the bridge running
+      (turn on "Start the bridge when I log in" below), or FDM can't connect.</div>
+  </div></div>
+
   <h2>Networks</h2>
   <div class="card" id="networks"><div class="empty">Looking for networks…</div></div>
   <p class="muted small">Speed only adds up when each network reaches the internet through its own connection,
@@ -182,7 +192,8 @@ function renderNetworks() {
         el("div", { class: "name" }, n.name, n.name !== n.id ? el("span", { class: "muted small" }, "  " + n.id) : null),
         el("div", { class: "muted small mono" }, n.kind + " · " + n.addresses.join(", "))),
       status,
-      el("div", { class: "mono small", style: "width:86px;text-align:right" }, speed(n.rate)),
+      el("div", { class: "mono small", style: "width:96px;text-align:right" }, speed(n.rate),
+        n.tunnels ? el("div", { class: "muted" }, n.tunnels + " conn") : null),
       el("label", { class: "switch" }, input, el("span")));
   }));
 }
@@ -242,6 +253,7 @@ async function refresh() {
     const online = state.networks.filter((n) => n.enabled && n.online).length;
     document.getElementById("meta").textContent =
       "Bridge " + state.version + " · " + online + " network" + (online === 1 ? "" : "s") + " in use";
+    for (const p of document.querySelectorAll(".port")) p.textContent = state.port;
     renderNetworks(); renderDownloads(); renderSettings();
   } catch (e) {
     document.getElementById("meta").textContent = "The bridge isn't answering. It starts again when FDM adds a link.";

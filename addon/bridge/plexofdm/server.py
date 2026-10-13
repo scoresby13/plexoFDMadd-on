@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import socket
 import sys
 import threading
 import time
@@ -19,7 +20,7 @@ from collections import defaultdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
-from . import VERSION, autostart
+from . import VERSION, autostart, proxy
 from .config import data_file, read_json, write_json
 from .engine import MIB, KIB, Session, plan_block_size, same_version
 from .netif import NetworkMonitor
@@ -50,6 +51,7 @@ class Bridge:
         self.rates = {}
         self._sample = (time.monotonic(), {})
         self.started = time.time()
+        self.tunnels = proxy.Tunnels()
         self.monitor = NetworkMonitor(config)
         self.monitor.on_change(self._networks_changed)
         self._load_sessions()
@@ -191,7 +193,9 @@ class Bridge:
         statuses = [s.status() for s in sessions]
         statuses.sort(key=lambda s: (not s["active"], s["filename"] or ""))
         networks = self.monitor.all()
+        tunnels = self.tunnels.snapshot()
         for net in networks:
+            net["tunnels"] = tunnels.get(net["id"], 0)
             net["rate"] = round(self.rates.get(net["id"], 0))
             net["bytes"] = self.bytes_by_net.get(net["id"], 0)
         cfg = self.config.snapshot()
@@ -201,6 +205,7 @@ class Bridge:
             "pid": os.getpid(),
             "platform": sys.platform,
             "uptime": round(time.time() - self.started),
+            "port": self.port,
             "networks": networks,
             "downloads": [s for s in statuses if s["active"] or s["served"] or s["error"]][:50],
             "config": cfg,
@@ -258,6 +263,30 @@ def make_handler(bridge):
         def log_message(self, fmt, *args):
             log.debug("%s %s", self.address_string(), fmt % args)
 
+        def handle(self):
+            # The port also takes SOCKS5, which starts with byte 5 where HTTP starts with a letter.
+            try:
+                first = self.connection.recv(1, socket.MSG_PEEK)
+            except OSError:
+                return
+            if first == b"\x05":
+                try:
+                    proxy.handle_socks(self.connection, bridge)
+                except (OSError, ValueError) as error:
+                    log.debug("SOCKS connection ended: %s", error)
+                return
+            super().handle()
+
+        def do_CONNECT(self):
+            proxy.handle_connect(self, bridge)
+
+        def _proxied(self):
+            """A request for another server (FDM using the bridge as its proxy)."""
+            if self.path[:7].lower() == "http://":
+                proxy.handle_absolute(self, bridge)
+                return True
+            return False
+
         def _send(self, status, body=b"", content_type="application/json", extra=None):
             if isinstance(body, (dict, list)):
                 body = json.dumps(body).encode()
@@ -294,6 +323,8 @@ def make_handler(bridge):
             self.do_GET()
 
         def do_GET(self):
+            if self._proxied():
+                return
             path = self._route()
             if path is None:
                 return
@@ -318,6 +349,8 @@ def make_handler(bridge):
             self._send(404, {"ok": False, "message": "Not found"})
 
         def do_POST(self):
+            if self._proxied():
+                return
             path = self._route()
             if path is None:
                 return

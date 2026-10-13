@@ -50,6 +50,22 @@ Windows only: Windows turns Wi-Fi off when Ethernet is plugged in. To keep both 
   - turn automatic mode off
   - turn on **Start the bridge when I log in**
 
+### Proxy mode: every download, torrents included
+
+The add-on only sees direct `http`/`https` links. **Magnet links and `.torrent` files never reach add-ons**, so for those, and for any download FDM doesn't hand to the add-on, use the bridge as FDM's proxy:
+
+1. Start the bridge. Either add any large link to FDM once, or use the standalone bundle: unzip `plexo-bridge-standalone.zip` and double-click `Start Plexo Bridge.cmd`. The standalone bundle needs [Python 3.10+](https://www.python.org/downloads/); on Windows, tick "Add python.exe to PATH" when installing.
+2. In FDM, open **Settings › Network**, choose a manual proxy, and enter:
+   - **HTTP and HTTPS proxy:** `127.0.0.1`, port `47913`
+   - **SOCKS5 proxy** (used for torrents): `127.0.0.1`, port `47913`
+3. On the status page, turn on **Start the bridge when I log in**. While FDM's proxy points at the bridge, FDM can't connect without it.
+
+Each connection FDM opens then goes out through whichever network has the fewest connections open. That covers HTTPS tunnels, plain HTTP requests, and SOCKS5 connections to torrent peers. FDM already splits a download into several connections and gives more work to the ones that finish first, so a faster network ends up carrying more of the file. Set FDM to use 8 or more connections per download so every network gets some.
+
+This is less fine-grained than the add-on: one slow connection can't be raced. But it needs nothing from FDM except its proxy setting.
+
+For torrents, only TCP peer connections go through SOCKS5. UDP traffic (DHT, uTP, UDP trackers) isn't proxied, so how much it helps depends on how FDM's torrent engine treats a proxy. To stop using proxy mode, set FDM's proxy back to "No proxy".
+
 ### Resuming after a restart
 
 FDM only runs the add-on when a link is added. If you pause a download and later restart the computer, the bridge has to be running again before FDM can resume. Either turn on **Start the bridge when I log in** on the status page, or add any link to FDM, which starts the bridge. Downloads in progress are remembered for 60 days.
@@ -62,19 +78,19 @@ The bridge is a normal Python program, which helps with troubleshooting. From th
 python bridge/plexo_fdm.py networks   # each network found, and whether it reaches the internet
 python bridge/plexo_fdm.py start      # start the bridge in the background
 python bridge/plexo_fdm.py status     # what it's doing, as JSON
-python bridge/plexo_fdm.py ui         # open the status page
+python bridge/plexo_fdm.py ui         # start it if needed and open the status page
 python bridge/plexo_fdm.py stop
 python bridge/plexo_fdm.py serve --verbose   # run in the foreground, logging to the terminal
 ```
 
-Settings, the log (`bridge.log`) and the download records are kept in:
+Settings, logs and download records are kept in the folders below. `addon.log` records every time FDM ran the add-on and what happened. `bridge.log` is the bridge's own log.
 - Windows: `%LOCALAPPDATA%\PlexoFDM`
 - macOS: `~/Library/Application Support/PlexoFDM`
 - Linux: `~/.local/share/plexo-fdm`
 
 ## Limitations
 
-- **Direct HTTP/HTTPS downloads only.** Torrents, and video sites handled by other add-ons, still use FDM's own engine. The add-on never takes web pages, so a video add-on still gets them.
+- **The add-on handles direct HTTP/HTTPS downloads only.** Torrents and magnet links never reach add-ons; use [proxy mode](#proxy-mode-every-download-torrents-included) for those. The add-on never takes web pages, so a video add-on still gets them.
 - **The server has to support byte ranges.** Most file hosts and CDNs do. When a server doesn't, FDM downloads the file normally.
 - **FDM proxy settings:** if FDM is set to use a proxy for a link, the add-on leaves that link to FDM, because the bridge connects directly through each network.
 - **Linux:** each stream is pinned to its network with `SO_BINDTODEVICE`, which works without root on Linux 5.7 and later. On older kernels, the bridge only binds source addresses, which needs one route per network.
@@ -86,7 +102,7 @@ Settings, the log (`bridge.log`) and the download records are kept in:
 ```bash
 python -m unittest tests.test_bridge -v   # the bridge, against a local test server (Linux)
 node --test tests/addon.test.mjs          # the add-on's JavaScript, in a stand-in for FDM
-./build/build.sh                          # dist/plexo-multi-network.fda (Windows: .\build\build.ps1)
+./build/build.sh                          # dist/plexo-multi-network.fda and plexo-bridge-standalone.zip
 ```
 
 The bridge tests use loopback addresses as stand-in networks. A test server paces each source address as its own link, for example a 2 MB/s network and a 6 MB/s one. The tests check that:
@@ -112,8 +128,10 @@ addon/                      what goes in the .fda
     netif.py                finding networks and checking they reach the internet
     probe.py                the first-byte probe, cookies, file names
     server.py               the local server FDM downloads from, its API and status page
+    proxy.py                proxy mode: HTTP, HTTPS (CONNECT) and SOCKS5, one network per connection
     ui.html                 the status page
     autostart.py            starting the bridge at login
+launcher/                   the standalone bundle's launchers (Windows .cmd, macOS/Linux .sh)
 tests/                      the tests above
 build/                      packaging scripts
 ```
