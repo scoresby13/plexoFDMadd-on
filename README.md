@@ -36,7 +36,7 @@ Windows only: Windows turns Wi-Fi off when Ethernet is plugged in. To keep both 
 
 ## Install
 
-1. Build `plexo-multi-network.fda` (see below), or download it from this repository's Releases or CI artifacts.
+1. Download the latest `.fda` from the [`release/`](release/) folder, or build it yourself (see below).
 2. In FDM, open the main menu › **Add-ons**, choose to install an add-on from a file, and pick `plexo-multi-network.fda`.
 3. Allow the **launchPython** permission when FDM asks, and let FDM install Python if it offers.
 
