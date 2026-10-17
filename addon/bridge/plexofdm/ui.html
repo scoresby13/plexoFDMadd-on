@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plexo for FDM</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #646b78; --line: #e3e6eb;
+    --accent: #2f6fed; --good: #1f9d55; --bad: #d64545; --warn: #c27c0e;
+    --n0: #2f6fed; --n1: #e0782a; --n2: #1f9d55; --n3: #9b51e0; --n4: #d64571; --n5: #0f9fb5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --card: #181b21; --text: #e8eaef; --muted: #98a0ae; --line: #2a2f38;
+      --accent: #6b9bff; --good: #44c07a; --bad: #ff6b6b; --warn: #e7a93b;
+      --n0: #6b9bff; --n1: #f39a55; --n2: #44c07a; --n3: #b98af0; --n4: #f07aa0; --n5: #3fc6dc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 28px 0 8px; }
+  .total { font: 600 22px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .small { font-size: 12px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.good { color: var(--good); border-color: currentColor; }
+  .pill.bad { color: var(--bad); border-color: currentColor; }
+  .bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); margin-top: 6px; }
+  .bar span { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+  .error { color: var(--bad); }
+  .empty { padding: 18px 14px; color: var(--muted); }
+  label.switch { position: relative; width: 38px; height: 22px; flex: none; }
+  label.switch input { opacity: 0; width: 0; height: 0; }
+  label.switch span { position: absolute; inset: 0; background: var(--line); border-radius: 99px; transition: .15s; cursor: pointer; }
+  label.switch span::after { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+                             background: #fff; border-radius: 50%; transition: .15s; }
+  label.switch input:checked + span { background: var(--accent); }
+  label.switch input:checked + span::after { transform: translateX(16px); }
+  label.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+                       background: var(--bg); color: var(--text); font: inherit; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--line); padding: 1px 5px; border-radius: 4px; }
+  .notice { padding: 10px 14px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); margin-top: 14px; }
+  .notice.bad { border-color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Plexo for FDM</h1>
+      <div class="muted small" id="meta">Connecting to the bridge…</div>
+    </div>
+    <div class="total" id="total" aria-live="polite">0 B/s</div>
+  </header>
+  <div id="notice"></div>
+
+  <h2>Use it for every FDM download, torrents included</h2>
+  <div class="card"><div class="row" style="display:block">
+    <div class="muted small">In FDM, open <b>Settings › Network</b>, choose a manual proxy, and enter:</div>
+    <div class="mono small" style="margin-top:6px">HTTP and HTTPS proxy: <b>127.0.0.1</b> port <b class="port">47913</b><br>
+      SOCKS5 proxy (torrents): <b>127.0.0.1</b> port <b class="port">47913</b></div>
+    <div class="muted small" style="margin-top:6px">Each connection FDM opens then leaves through the network carrying the fewest.
+      Set FDM to use 8 or more connections per download so every network gets some. Keep the bridge running
+      (turn on "Start the bridge when I log in" below), or FDM can't connect.</div>
+  </div></div>
+
+  <h2>Networks</h2>
+  <div class="card" id="networks"><div class="empty">Looking for networks…</div></div>
+  <p class="muted small">Speed only adds up when each network reaches the internet through its own connection,
+    for example home Wi-Fi plus a phone tethered over USB. Wi-Fi and Ethernet on the same router share one connection.</p>
+
+  <h2>Downloads</h2>
+  <div class="card" id="downloads"><div class="empty">Nothing yet. Add a link to Free Download Manager.</div></div>
+
+  <h2>Settings</h2>
+  <div class="card" id="settings">
+    <div class="row">
+      <div class="grow"><div class="name">Use for large downloads automatically</div>
+        <div class="muted small">When off, only links ending in <code>#plexo</code> go through every network.</div></div>
+      <label class="switch"><input type="checkbox" data-key="auto"><span></span></label>
+    </div>
+    <div class="row">
+      <div class="grow"><div class="name">Smallest file to split</div>
+        <div class="muted small">Smaller downloads stay with FDM's own engine.</div></div>
+      <input type="number" min="0" step="1" data-key="min_size_mb" aria-label="Smallest file in MB"> <span class="muted">MB</span>
+    </div>
+    <div class="row">
+      <div class="grow"><div class="name">Networks needed</div>
+        <div class="muted small">With fewer online, FDM downloads on its own (a <code>#plexo</code> link still splits).</div></div>
+      <input type="number" min="1" max="8" step="1" data-key="min_networks" aria-label="Networks needed">
+    </div>
+    <div class="row">
+      <div class="grow"><div class="name">Streams per network</div>
+        <div class="muted small">Connections each network opens for a download. 8 suits most servers.</div></div>
+      <input type="number" min="1" max="32" step="1" data-key="streams_per_network" aria-label="Streams per network">
+    </div>
+    <div class="row">
+      <div class="grow"><div class="name">Show VPN and virtual adapters</div>
+        <div class="muted small">Tunnels and virtual machine adapters rarely add a separate connection.</div></div>
+      <label class="switch"><input type="checkbox" data-key="include_virtual"><span></span></label>
+    </div>
+    <div class="row">
+      <div class="grow"><div class="name">Start the bridge when I log in</div>
+        <div class="muted small">Lets FDM resume a paused download after you restart the computer.</div></div>
+      <label class="switch"><input type="checkbox" data-key="autostart"><span></span></label>
+    </div>
+  </div>
+</main>
+<script>
+const KEY = "__PLEXO_KEY__";
+const COLORS = ["--n0", "--n1", "--n2", "--n3", "--n4", "--n5"];
+const colorIndex = {};
+let state = null;
+let editing = null;
+
+function color(id) {
+  if (!(id in colorIndex)) colorIndex[id] = Object.keys(colorIndex).length % COLORS.length;
+  return "var(" + COLORS[colorIndex[id]] + ")";
+}
+function bytes(n) {
+  if (!n) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+  return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + " " + u[i];
+}
+function speed(n) { return bytes(n) + "/s"; }
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v; else if (k === "style") node.setAttribute("style", v);
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v); else node.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+}
+async function call(path, body) {
+  const res = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "X-Plexo-Key": KEY, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await res.json();
+  if (!res.ok || data.ok === false) throw new Error(data.message || res.statusText);
+  return data;
+}
+
+function toggleNetwork(net, on) {
+  const cfg = state.config;
+  let disabled = cfg.disabled_networks.filter((id) => id !== net.id);
+  let enabled = cfg.enabled_networks.filter((id) => id !== net.id);
+  if (!on) disabled.push(net.id); else if (net.virtual) enabled.push(net.id);
+  save({ disabled_networks: disabled, enabled_networks: enabled });
+}
+async function save(changes) {
+  try { await call("/api/config", changes); notice(""); refresh(); }
+  catch (e) { notice("Couldn't save: " + e.message, true); refresh(); }
+}
+function notice(text, bad) {
+  const box = document.getElementById("notice");
+  box.replaceChildren(text ? el("div", { class: "notice" + (bad ? " bad" : "") }, text) : "");
+}
+
+function renderNetworks() {
+  const box = document.getElementById("networks");
+  const nets = state.networks.filter((n) => !n.virtual || state.config.include_virtual || n.enabled);
+  if (!nets.length) { box.replaceChildren(el("div", { class: "empty" }, "No network adapters found.")); return; }
+  box.replaceChildren(...nets.map((n) => {
+    const status = n.online === null ? el("span", { class: "pill" }, "checking")
+      : n.online ? el("span", { class: "pill good" }, "online" + (n.latency_ms != null ? " · " + n.latency_ms + " ms" : ""))
+      : el("span", { class: "pill bad" }, n.enabled ? "no internet" : "off");
+    const input = el("input", { type: "checkbox", "aria-label": "Use " + n.name });
+    input.checked = n.enabled;
+    input.addEventListener("change", () => toggleNetwork(n, input.checked));
+    return el("div", { class: "row" },
+      el("span", { class: "dot", style: "background:" + color(n.id) }),
+      el("div", { class: "grow" },
+        el("div", { class: "name" }, n.name, n.name !== n.id ? el("span", { class: "muted small" }, "  " + n.id) : null),
+        el("div", { class: "muted small mono" }, n.kind + " · " + n.addresses.join(", "))),
+      status,
+      el("div", { class: "mono small", style: "width:96px;text-align:right" }, speed(n.rate),
+        n.tunnels ? el("div", { class: "muted" }, n.tunnels + " conn") : null),
+      el("label", { class: "switch" }, input, el("span")));
+  }));
+}
+
+function renderDownloads() {
+  const box = document.getElementById("downloads");
+  if (!state.downloads.length) {
+    box.replaceChildren(el("div", { class: "empty" }, "Nothing yet. Add a link to Free Download Manager."));
+    return;
+  }
+  const names = Object.fromEntries(state.networks.map((n) => [n.id, n.name]));
+  box.replaceChildren(...state.downloads.map((d) => {
+    const fetched = Object.values(d.bytes_by_network).reduce((a, b) => a + b, 0);
+    const rate = Object.values(d.rate_by_network).reduce((a, b) => a + b, 0);
+    const bar = el("div", { class: "bar", title: "Share of the file each network fetched" },
+      ...Object.entries(d.bytes_by_network).map(([id, b]) =>
+        el("span", { style: "width:" + (100 * b / Math.max(d.size, fetched)).toFixed(2) + "%;background:" + color(id) })));
+    const legend = el("div", { class: "legend muted small" },
+      ...Object.entries(d.bytes_by_network).map(([id, b]) => el("span", {},
+        el("i", { style: "background:" + color(id) }),
+        (names[id] || id) + " " + bytes(b) + (d.active ? " · " + speed(d.rate_by_network[id] || 0) +
+          " · " + (d.streams_by_network[id] || 0) + " streams" : ""))));
+    return el("div", { class: "row", style: "display:block" },
+      el("div", { style: "display:flex;gap:12px;align-items:baseline" },
+        el("div", { class: "name grow" }, d.filename || d.token),
+        el("div", { class: "mono small" }, d.active ? speed(rate) : "")),
+      el("div", { class: "muted small" },
+        bytes(d.served) + " of " + bytes(d.size) + " sent to FDM" + (d.host ? " · " + d.host : "") +
+        (d.active ? " · " + d.connections + " FDM connection" + (d.connections === 1 ? "" : "s") : "")),
+      bar, legend,
+      d.error ? el("div", { class: "error small" }, d.error) : null);
+  }));
+}
+
+function renderSettings() {
+  for (const input of document.querySelectorAll("#settings [data-key]")) {
+    if (input === editing) continue;
+    const value = state.config[input.dataset.key];
+    if (input.type === "checkbox") input.checked = !!value; else input.value = value;
+  }
+}
+
+for (const input of document.querySelectorAll("#settings [data-key]")) {
+  input.addEventListener("focus", () => { editing = input; });
+  input.addEventListener("blur", () => { editing = null; });
+  input.addEventListener("change", () => {
+    const value = input.type === "checkbox" ? input.checked : Number(input.value);
+    save({ [input.dataset.key]: value });
+  });
+}
+
+async function refresh() {
+  try {
+    state = await call("/api/state");
+    const total = state.networks.reduce((a, n) => a + (n.rate || 0), 0);
+    document.getElementById("total").textContent = speed(total);
+    const online = state.networks.filter((n) => n.enabled && n.online).length;
+    document.getElementById("meta").textContent =
+      "Bridge " + state.version + " · " + online + " network" + (online === 1 ? "" : "s") + " in use";
+    for (const p of document.querySelectorAll(".port")) p.textContent = state.port;
+    renderNetworks(); renderDownloads(); renderSettings();
+  } catch (e) {
+    document.getElementById("meta").textContent = "The bridge isn't answering. It starts again when FDM adds a link.";
+  }
+}
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
